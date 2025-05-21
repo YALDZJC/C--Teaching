@@ -456,9 +456,12 @@ namespace Heat_Detector
 
 <img src="./assets/%E7%A4%BA%E4%BE%8B%E5%B5%8C%E5%A5%97%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4.gif" alt="示例嵌套命名空间" style="zoom: 50%;" />
 
-## 内联inline
 
-### inline介绍
+
+## 一些关键字
+### 内联inline
+
+#### inline介绍
 
 ​	inline 关键字用于建议编译器尝试将函数体内联到每个函数调用的位置。这意味着编译器会在函数调用的位置直接插入函数的代码，而不是执行常规的函数调用，从而减少函数调用的运行时开销。
 
@@ -474,7 +477,7 @@ namespace Heat_Detector
 
 ​	所以，inline就有如下妙用：
 
-### inline的妙用
+#### inline的妙用
 
 在c++17中，inline允许修饰变量和类。
 
@@ -498,9 +501,9 @@ inline GM6020<1> Motor6020(0x204, {1}, 0x1FE);
 //这样就直接可以全局调用了
 ~~~
 
-## constexpr
+### constexpr
 
-### 介绍
+#### 介绍
 
 ​	`constexpr`（constant expression）是 C++11 引入的关键字，用于声明常量表达式。
 
@@ -511,7 +514,7 @@ inline GM6020<1> Motor6020(0x204, {1}, 0x1FE);
 
 > `constexpr`能修饰函数,但是我没用过,特性与修饰变量是不一样
 
-### 示例
+#### 示例
 
 一些单位的换算可以直接用`constexpr`得出系数，这样不用每次运行都重新计算。
 
@@ -520,4 +523,3 @@ inline GM6020<1> Motor6020(0x204, {1}, 0x1FE);
 static constexpr double deg_to_rad = 0.017453292519611;
 static constexpr double rad_to_deg = 1 / 0.017453292519611;
 ~~~
-
