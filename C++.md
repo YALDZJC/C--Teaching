@@ -523,3 +523,160 @@ inline GM6020<1> Motor6020(0x204, {1}, 0x1FE);
 static constexpr double deg_to_rad = 0.017453292519611;
 static constexpr double rad_to_deg = 1 / 0.017453292519611;
 ~~~
+
+## STD
+
+​	c++的std库其实有很多可以直接用的常用功能，比如`memcpy`、`clamp`、`fmax`、`fmin`等等，不需要再自己手动写类似函数。但是std库中一些比较占用单片机资源的尽量不要使用。
+
+## 一些技巧
+
+### 通信
+
+在与其他设备通信时，大部分数据的内存都是按照协议规定排序的。对于这种已经严格划分内存区域的数据，可以使`std::memcpy`函数进行数据的读取与发送。
+
+在hpp中利用alignas(uint64_t)将数据严格对齐，不要让编译器自动填充。
+
+> **__attribute__**((packed))关键字也可以
+
+然后使用**位域结构体根据手册**的数据内存大小，划分每个数据的字节数(如果数据正好是完整的字节，可以省略字节数的指定。)。
+
+~~~c++
+/*.hpp*/
+struct alignas(uint64_t) DjiMotorfeedback
+{
+    int16_t angle;
+    int16_t velocity;
+    int16_t current;
+    uint8_t temperature;
+    uint8_t unused;
+};
+
+
+/*.cpp*/
+// 解析函数
+/**
+ * @brief 解析CAN数据
+ *
+ * @param RxHeader  接收数据的句柄
+ * @param pData     接收数据的缓冲区
+ */
+void Parse(const CAN_RxHeaderTypeDef RxHeader, const uint8_t *pData)
+{
+    const uint16_t received_id = CAN::BSP::CAN_ID(RxHeader);
+
+    for (uint8_t i = 0; i < N; ++i)
+    {
+        if (received_id == init_address + recv_idxs_[i])
+        {
+            std::memcpy(&feedback_[i], pData, sizeof(DjiMotorfeedback));
+			//由于can发送的是大端数据，所以需要用__builtin_bswap16反转大小端序
+            feedback_[i].angle = __builtin_bswap16(feedback_[i].angle);
+            feedback_[i].velocity = __builtin_bswap16(feedback_[i].velocity);
+            feedback_[i].current = __builtin_bswap16(feedback_[i].current);
+
+            Configure(i);
+
+            this->runTime_[i].dirTime.UpLastTime();
+        }
+    }
+}
+~~~
+
+### 有限状态机
+
+在使用**DT7遥控器**进行各种模式的切换时，我时常感觉用13，12，21，22这种基于*拨杆状态切换模式*的状态机过于反人类。
+
+于是，刚开始学c++的利用刚开始学习的c++重构了一套基于状态模式的事件驱动的状态机，详情请看我的底盘代码：
+
+[SG_CHASSIS_C_2024_11_5/MDK-ARM/User/Task/ChassisTask.cpp at main · YALDZJC/SG_CHASSIS_C_2024_11_5](https://github.com/YALDZJC/SG_CHASSIS_C_2024_11_5/blob/main/MDK-ARM/User/Task/ChassisTask.cpp)
+
+我最初的设想很好，符合开闭原则，模式之间直接解耦，一键更新。但是对于RM工况来说，并不需要这么复杂的操作。因为各个模式之间，貌似只有期望值不同。
+
+- 对于底盘来说，其实只有两种模式。
+
+    1. 为底盘跟随
+
+    2. 底盘不跟随
+
+        > 当我们把vw单独用旋钮拎出来后，小陀螺模式只是vw的期望值不同了而已。
+
+- 而对于云台来说。
+
+    1. 视觉期望值
+    2. 遥控期望值
+    3. 键鼠期望值
+
+        > 底盘可以不用专门设置底盘的键鼠模式，不过底盘需要对键鼠操作做一定拓展，比如加减功率这些
+
+- 对于发射机构来说
+
+    1. 摩擦轮期望值为0，拨盘期望值等于反馈值
+    2. 摩擦轮设置期望值，拨盘设定连续期望值
+    3. 摩擦轮设置期望值，拨盘设定单发期望值
+
+使用简单的**基于事件驱动的有限状态机**便可以满足需求，这是我看完中科大的视频后的想法。
+
+只需要继承有限状态机类就可以直接使用，简单，易懂，可读性高，拓展性也不差~~(RM工况)~~。
+
+~~~c++
+/*hpp*/
+enum Gimbal_Status
+{
+    DISABLE,
+    NORMOL,
+    VISION,
+    KEYBOARD
+};
+
+//继承父类
+class Gimbal : public Class_FSM
+{
+}
+
+/*cpp*/
+switch (Now_Status_Serial)
+{
+case (GIMBAL::DISABLE): {
+
+    // 如果失能则让期望值等于实际值pp
+    filter_tar_yaw_pos = BSP::IMU::imu.getAddYaw();
+    filter_tar_yaw_vel = BSP::IMU::imu.getGyroZ();
+
+    filter_tar_pitch += BSP::Motor::DM::Motor4310.getAddAngleDeg(1);
+
+    // 检测状态变化的上升沿（进入DISABLE状态）
+    if (DM_state.getRisingEdge())
+    {
+        BSP::Motor::DM::Motor4310.On(&hcan2, 1);
+        osDelay(1);
+    }
+
+    break;
+}
+case (GIMBAL::VISION): {
+    // 视觉模式
+    filter_tar_yaw_pos = Communicat::vision.getTarYaw();
+    filter_tar_pitch = Communicat::vision.getTarPitch();
+    break;
+}
+case (GIMBAL::KEYBOARD): {
+    // 键鼠模式
+    filter_tar_yaw_vel = remote->getMouseVelX() * 100000;
+    filter_tar_pitch += remote->getMouseVelY() * 1000;
+    // 一键掉头
+    TurnAround();
+    break;
+}
+case (GIMBAL::NORMOL): {
+    // 正常状态
+    filter_tar_yaw_vel = remote_rx * 150;
+    filter_tar_pitch += remote_ry * 0.5f;
+    break;
+}
+}
+~~~
+
+
+
+
+
