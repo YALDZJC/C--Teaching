@@ -99,6 +99,8 @@ private:
     Alg::LADRC::Adrc adrc_yaw_vel; // adrc的速度环
 }
 
+
+
 ~~~
 
 ## 继承
@@ -108,8 +110,6 @@ private:
 **不到万不不得以，不要使用多继承**
 
 >   多继承会让程序的可读性大大降低，并且会有菱形继承的问题
-
-
 
 ## 多态
 
@@ -147,7 +147,6 @@ class IRemoteController
     virtual bool isVisionMode() const = 0;
     virtual bool isLaunchMode() const = 0;
     virtual bool isKeyboardMode() const = 0;
-    virtual bool isVisionFireMode() const = 0;
     virtual bool isStopMode() const = 0;
 }
 ~~~
@@ -322,8 +321,8 @@ int main()
 }
 ~~~
 
-
 **3. 整个库只会有一个更新方法，其他的方法在这个方法里自己更新**。就拿上述代码来说，只有一个`UpData`方法，不用再额外的调用
+
 > 如果没有必要用多个更新方法的话，就~~尽量~~直接省去
 
 再比如ADRC代码：
@@ -420,8 +419,6 @@ float Adrc::UpData(float feedback)
 
 但是切记代码**不要过度设计**。
 
-
-
 ## 命名空间
 
 ### 为什么使用命名空间
@@ -479,7 +476,7 @@ namespace Heat_Detector
 
 #### inline的妙用
 
-在c++17中，inline允许修饰变量和类。
+在c++17中，inline允许修饰变量。
 
 写过*only head*库的同学都知道在`.h`或者`.hpp`文件里声明一个全局类后，根本就不需要在.c文件里创建全局实例。
 
@@ -534,7 +531,7 @@ static constexpr double rad_to_deg = 1 / 0.017453292519611;
 
 - 如果代码足够清晰的话，auto能使代码变得简洁、工整。
 
-- Lambda 表达式是匿名函数对象，其具体类型由编译器自动生成且比较复杂，无法直接用常规类型来表示，所以必须使用 auto 来进行类型推断。
+- *Lambda 表达式*是匿名函数对象，其具体类型由编译器自动生成且比较复杂，无法直接用常规类型来表示，所以必须使用 auto 来进行类型推断。
 - auto本身**不会有性能开销**，因为在编译期就能推导出数据类型。
 
 #### 示例：
@@ -619,7 +616,7 @@ void Parse(const CAN_RxHeaderTypeDef RxHeader, const uint8_t *pData)
 
 在使用**DT7遥控器**进行各种模式的切换时，我时常感觉用13，12，21，22这种基于*拨杆状态切换模式*的状态机过于反人类。
 
-于是，刚开始学c++的利用刚开始学习的c++重构了一套基于状态模式的事件驱动的状态机，详情请看我的底盘代码：
+于是，刚开始学c++的利用刚开始学习的c++重构了一套基于状态模式的**事件驱动**的状态机，详情请看我的底盘代码：
 
 [SG_CHASSIS_C_2024_11_5/MDK-ARM/User/Task/ChassisTask.cpp at main · YALDZJC/SG_CHASSIS_C_2024_11_5](https://github.com/YALDZJC/SG_CHASSIS_C_2024_11_5/blob/main/MDK-ARM/User/Task/ChassisTask.cpp)
 
@@ -627,9 +624,11 @@ void Parse(const CAN_RxHeaderTypeDef RxHeader, const uint8_t *pData)
 
 - 对于底盘来说，其实只有两种模式。
 
-    1. 为底盘跟随
+    1. 底盘跟随
 
     2. 底盘不跟随
+
+    3. 停止模式
 
         > 当我们把vw单独用旋钮拎出来后，小陀螺模式只是vw的期望值不同了而已。
 
@@ -638,6 +637,7 @@ void Parse(const CAN_RxHeaderTypeDef RxHeader, const uint8_t *pData)
     1. 视觉期望值
     2. 遥控期望值
     3. 键鼠期望值
+    4. 停止模式
 
         > 底盘可以不用专门设置底盘的键鼠模式，不过底盘需要对键鼠操作做一定拓展，比如加减功率这些
 
@@ -846,3 +846,4 @@ bool isVisionMode() const override
 
 ## STL
 
+##  Template
